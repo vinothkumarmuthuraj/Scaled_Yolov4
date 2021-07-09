@@ -10,10 +10,13 @@ python detect.py --model_type tiny --image_directory ./image_directory --img_sav
 python detect_video.py --model_type tiny --video_directory ./video_directory/project.mp4 --video_ouptut_directory ./output_video --checkpoint_dir ./weight --class_names ./class.names --fixed_scale_bool True --fixed_scale 608 --drop_block True --output_video_name project
 
 # Detection result of detecting Furniture, Doors, Garments, Cables in view of Vaccum cleaner
+
+![vac216](https://user-images.githubusercontent.com/48114165/125116888-05047480-e10b-11eb-9549-936119563c35.jpg)
+![vac232](https://user-images.githubusercontent.com/48114165/125117030-37ae6d00-e10b-11eb-89bf-adb8d25232b3.jpg)
 ![vac377](https://user-images.githubusercontent.com/48114165/125062652-432e7380-e0cc-11eb-9532-526dc5330de5.jpg)
 ![vac366](https://user-images.githubusercontent.com/48114165/125062737-59d4ca80-e0cc-11eb-9827-8dd31d77c5b1.jpg)
 ![vac11](https://user-images.githubusercontent.com/48114165/125062859-783ac600-e0cc-11eb-8aad-801e876989c5.jpg)
-![vac178](https://user-images.githubusercontent.com/48114165/125062886-812b9780-e0cc-11eb-921c-147eb90dfbce.jpg)
+
 
 # References
 Yolov4 - https://arxiv.org/pdf/2004.10934.pdf                                                                                                                                             
