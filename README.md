@@ -16,6 +16,6 @@ python detect_video.py --model_type tiny --video_directory ./video_directory/pro
 ![vac178](https://user-images.githubusercontent.com/48114165/125062886-812b9780-e0cc-11eb-921c-147eb90dfbce.jpg)
 
 # References
-Yolov4 - https://arxiv.org/pdf/2004.10934.pdf
-Scaled Yolov4 - https://arxiv.org/pdf/2011.08036.pdf
+Yolov4 - https://arxiv.org/pdf/2004.10934.pdf                                                                                                                                             
+Scaled Yolov4 - https://arxiv.org/pdf/2011.08036.pdf                                                                                                                                     
 https://github.com/hunglc007/tensorflow-yolov4-tflite
