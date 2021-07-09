@@ -52,6 +52,7 @@ def parse_args(args):
     parser.add_argument('--nms_iou_threshold', default=0.20, type=float)
     parser.add_argument('--nms_score_threshold', default=0.25, type=float)
     parser.add_argument('--output_video_name', default='project')
+    parser.add_argument('--save_method', default='.ckpt', help="choices=['.ckpt','h5']")
     
     return parser.parse_args(args)   
 
@@ -98,14 +99,30 @@ def main(args):
     elif args.optimizer == 'sgd':
         optimizer = tf.keras.optimizers.SGD()
         
-    root = tf.train.Checkpoint(optimizer=optimizer,model=model)
-    manager = tf.train.CheckpointManager(root,args.checkpoint_dir, max_to_keep=3)
-    print(manager.checkpoints)
-    root.restore(manager.latest_checkpoint)
+    if args.save_method == '.ckpt':
+        root = tf.train.Checkpoint(optimizer=optimizer,model=model)
+        manager = tf.train.CheckpointManager(root,args.checkpoint_dir, max_to_keep=3)
+        print(manager.checkpoints)
+        root.restore(manager.latest_checkpoint).expect_partial()
+    elif args.save_method == '.h5':
+        file_paths = os.listdir(args.checkpoint_dir)
+
+        if len(file_paths) == 0:
+            print('No h5 in folder')
+        else:
+            for File in file_paths:
+                if File.endswith(".h5"):
+                    model.load_weights(args.checkpoint_dir + '\yolo.h5',by_name=True, skip_mismatch=True)
+                    print('Restored from .h5')
     
     hsv_tuples = [(1.0 * x / class_num, 1., 1.) for x in range(class_num)]
     colors = list(map(lambda x: colorsys.hsv_to_rgb(*x), hsv_tuples))
     colors = list(map(lambda x: (int(x[0] * 255.), int(x[1] * 255.), int(x[2] * 255.)), colors))
+    
+    if args.fixed_scale_bool == True:
+        input_size = args.fixed_scale
+    else:
+        input_size = args.detect_img_size
     
     video_path = args.video_directory
     vid = cv2.VideoCapture(video_path)
@@ -122,6 +139,7 @@ def main(args):
         if return_value:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame= tf.image.convert_image_dtype(frame, tf.float32)
+            org_h,org_w,_ = frame.shape
         else:
             if frame_id == vid.get(cv2.CAP_PROP_FRAME_COUNT):
                 print("Video processing complete")
@@ -129,33 +147,45 @@ def main(args):
             raise ValueError("No image! Try with another video format")
             
         frame_size = frame.shape[:2]
-        if args.fixed_scale_bool==True:
-            image_resize = tf.image.resize_with_pad(image = frame,target_height = args.fixed_scale,
-                                                     target_width = args.fixed_scale)
-        else:
-            image_resize = tf.image.resize_with_pad(image = frame,target_height = args.detect_img_size,
-                                                     target_width = args.detect_img_size)
+        resize_ratio = min(input_size / org_w, input_size / org_h)
+        image_resize = tf.image.resize_with_pad(image = frame,target_height = input_size,
+                                                     target_width = input_size)
+        resize_ratio_tile = np.tile([resize_ratio],4)
+        
         image_resize_shape = image_resize.shape   
         image_data = np.expand_dims(image_resize,axis=0)
         
         #converted to numpy for the purpose of plotting boxes
-        image_resize_ny = image_resize.numpy()*255
-        image_resize_ny = image_resize_ny.astype(np.uint8)
+        original_image_ny = frame.numpy()*255
+        original_image_ny = original_image_ny.astype(np.uint8)
         
         boxes,scores,classes,valid_detections = detect_batch_img(image_data, model,args)
     
         batch_index = 0
         valid_boxes = (boxes[batch_index][0:valid_detections[batch_index]]) * image_resize_shape[0]
+        valid_boxes = valid_boxes/resize_ratio_tile
         valid_classes = classes[batch_index][0:valid_detections[batch_index]]
         valid_scores = scores[batch_index][0:valid_detections[batch_index]]
         
         count_detected = valid_boxes.shape[0]
         for i in range(count_detected):
             box = valid_boxes[i][:4]
-            x1 = int(box[0])
-            y1 = int(box[1])
-            x2 = int(box[2])
-            y2 = int(box[3])
+            x1  = int(box[0] - (input_size-(org_w/(1/resize_ratio))))
+            if x1<0:
+                x1 = 0
+                
+            y1 = int(box[1] - (input_size-(org_h/(1/resize_ratio))))
+            if y1<0:
+                y1 = 0
+                
+            x2 = int(box[2] - (input_size-(org_w/(1/resize_ratio))))
+            if x2>org_w:
+                x2 = org_w
+                
+            y2 = int(box[3] - (input_size-(org_h/(1/resize_ratio))))
+            if y2>org_h:
+                y2 = org_h
+                
             valid_class = valid_classes[i]
             
             fontScale = 0.5
@@ -164,18 +194,18 @@ def main(args):
             bbox_thick = 2
             c1, c2 = (x1, y1), (x2, y2)
             
-            cv2.rectangle(image_resize_ny, (x1,y1) ,(x2,y2), bbox_color, bbox_thick)
+            cv2.rectangle(original_image_ny, (x1,y1) ,(x2,y2), bbox_color, bbox_thick)
             
             bbox_mess = '%s: %.2f' % (labels[valid_class], score)
             t_size = cv2.getTextSize(bbox_mess, 0, fontScale, thickness=bbox_thick // 2)[0]
             c3 = (c1[0] + t_size[0], c1[1] - t_size[1] - 3)
-            cv2.rectangle(image_resize_ny, c1, (np.float32(c3[0]), np.float32(c3[1])), bbox_color, -1) #filled
+            cv2.rectangle(original_image_ny, c1, (np.float32(c3[0]), np.float32(c3[1])), bbox_color, -1) #filled
 
-            cv2.putText(image_resize_ny, bbox_mess, (c1[0], np.float32(c1[1] - 2)), cv2.FONT_HERSHEY_SIMPLEX,
+            cv2.putText(original_image_ny, bbox_mess, (c1[0], np.float32(c1[1] - 2)), cv2.FONT_HERSHEY_SIMPLEX,
                         fontScale, (0, 0, 0), bbox_thick // 2, lineType=cv2.LINE_AA)
             
 
-        out.write(image_resize_ny)
+        out.write(original_image_ny)
         frame_id += 1
     out.release()
         
