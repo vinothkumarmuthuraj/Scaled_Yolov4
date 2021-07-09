@@ -62,6 +62,7 @@ def parse_args(args):
     parser.add_argument('--obj_losss_weight', default=1., type=float)
     parser.add_argument('--cls_losss_weight', default=0.5, type=float)
     parser.add_argument('--save_step', default=2, type=int)
+    parser.add_argument('--save_method', default='.ckpt',help="choices=[.ckpt,.h5]")
     parser.add_argument('--checkpoint_dir', default='./checkpoint')
     parser.add_argument('--epochvsloss_plot_path', default='./epochvsloss_plot_path')
     
@@ -137,13 +138,26 @@ def main(args):
         
     #checkpoint
     root = tf.train.Checkpoint(step=tf.Variable(1), optimizer=optimizer,model=model)
-    manager = tf.train.CheckpointManager(root, args.checkpoint_dir, max_to_keep=3)
-    root.restore(manager.latest_checkpoint)
     
-    if manager.latest_checkpoint:
-        print("Restored from {}".format(manager.latest_checkpoint))
-    else:
-        print("Initializing from scratch.")
+    if args.save_method == '.ckpt':
+        manager = tf.train.CheckpointManager(root, args.checkpoint_dir, max_to_keep=3)
+        root.restore(manager.latest_checkpoint)
+        if manager.latest_checkpoint:
+            print("Restored from ckpt {}".format(manager.latest_checkpoint))
+        else:
+            print("Initializing from scratch ckpt.")
+    
+    elif args.save_method == '.h5':
+        file_paths = os.listdir(args.checkpoint_dir)
+
+        if len(file_paths) == 0:
+            print('Initializing from scratch h5.')
+        else:
+            for File in file_paths:
+                if File.endswith(".h5"):
+                    model.load_weights(args.checkpoint_dir + '\yolo.h5',by_name=True, skip_mismatch=True)
+                    print('Restored from .h5')
+
         
     train_loss_history = []
     val_loss_history = []
@@ -212,9 +226,15 @@ def main(args):
             val_reg_loss_avg, val_conf_loss_avg, val_cls_loss_avg, optimizer.lr.numpy()))
                                          
         root.step.assign_add(1)
-        if int(root.step) % args.save_step == 0:
-            save_path = manager.save()
-            print("Saved checkpoint for step {}: {}".format(int(root.step), save_path))
+        if args.save_method == '.ckpt':
+            if int(root.step) % args.save_step == 0:
+                save_path = manager.save()
+                print("Saved checkpoint for step {}: {}".format(int(root.step), save_path))
+                
+        elif args.save_method == '.h5':
+            if int(root.step) % args.save_step == 0:
+                model.save_weights(args.checkpoint_dir + '\yolo.h5')
+                print('model_saved')
     
     fig = plt.figure()
     plt.plot(train_loss_history)
